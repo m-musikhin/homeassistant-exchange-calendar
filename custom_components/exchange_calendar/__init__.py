@@ -5,6 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .const import (
     DOMAIN,
@@ -22,7 +23,11 @@ from .const import (
     DEFAULT_ALLOW_INSECURE_SSL,
 )
 from .coordinator import ExchangeCalendarCoordinator
-from .exchange_client import create_client
+from .exchange_client import (
+    create_client,
+    ExchangeAuthError,
+    ExchangeConnectionError,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,7 +54,15 @@ async def async_setup_entry(
     )
 
     # Test connection in executor (exchangelib is synchronous)
-    await hass.async_add_executor_job(client.connect)
+    try:
+        await hass.async_add_executor_job(client.connect)
+    except ExchangeAuthError as err:
+        # Invalid/expired credentials: start the reauth flow so the user can
+        # supply a new password without losing the existing configuration.
+        raise ConfigEntryAuthFailed(str(err)) from err
+    except ExchangeConnectionError as err:
+        # Server temporarily unreachable: let HA retry the setup later.
+        raise ConfigEntryNotReady(str(err)) from err
 
     # Create coordinator and perform first data fetch
     coordinator = ExchangeCalendarCoordinator(hass, entry, client)

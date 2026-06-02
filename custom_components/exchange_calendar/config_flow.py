@@ -51,6 +51,49 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
         self._auth_data: dict[str, Any] = {}
         self._last_error_detail: str = ""
 
+    async def _async_validate_auth(self, auth_data: dict[str, Any]) -> dict[str, str]:
+        """Validate credentials against the server.
+
+        Returns an empty dict on success, or an ``errors`` dict (keyed for
+        ``async_show_form``) describing what went wrong. On failure it also
+        records the detail in ``self._last_error_detail`` and raises a debug
+        notification, mirroring the behaviour of the individual setup steps.
+        """
+        errors: dict[str, str] = {}
+        auth_type = auth_data[CONF_AUTH_TYPE]
+        try:
+            client = create_client(
+                auth_type=auth_type,
+                email=auth_data[CONF_EMAIL],
+                server=auth_data.get(CONF_SERVER),
+                username=auth_data.get(CONF_USERNAME),
+                password=auth_data.get(CONF_PASSWORD),
+                domain=auth_data.get(CONF_DOMAIN, ""),
+                client_id=auth_data.get(CONF_CLIENT_ID),
+                client_secret=auth_data.get(CONF_CLIENT_SECRET),
+                tenant_id=auth_data.get(CONF_TENANT_ID),
+                allow_insecure_ssl=auth_data.get(
+                    CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
+                ),
+            )
+            await self.hass.async_add_executor_job(client.validate_connection)
+        except ExchangeAuthError as err:
+            self._last_error_detail = str(err)
+            _LOGGER.error("%s auth failed: %s", auth_type, err)
+            errors["base"] = "invalid_auth"
+            self._send_debug_notification(f"{auth_type} Auth Error", err)
+        except ExchangeConnectionError as err:
+            self._last_error_detail = str(err)
+            _LOGGER.error("%s connection failed: %s", auth_type, err)
+            errors["base"] = "cannot_connect"
+            self._send_debug_notification(f"{auth_type} Connection Error", err)
+        except Exception as err:  # noqa: BLE001
+            self._last_error_detail = str(err)
+            _LOGGER.exception("Unexpected error during %s validation: %s", auth_type, err)
+            errors["base"] = "unknown"
+            self._send_debug_notification(f"{auth_type} Unexpected Error", err)
+        return errors
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -107,51 +150,22 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            try:
-                client = create_client(
-                    auth_type=AUTH_TYPE_NTLM,
-                    server=user_input[CONF_SERVER],
-                    email=user_input[CONF_EMAIL],
-                    username=user_input.get(CONF_USERNAME, user_input[CONF_EMAIL]),
-                    password=user_input[CONF_PASSWORD],
-                    domain=user_input.get(CONF_DOMAIN, ""),
-                    allow_insecure_ssl=user_input.get(
-                        CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
-                    ),
-                )
-                await self.hass.async_add_executor_job(client.validate_connection)
-            except ExchangeAuthError as err:
-                self._last_error_detail = str(err)
-                _LOGGER.error("NTLM auth failed: %s", err)
-                errors["base"] = "invalid_auth"
-                self._send_debug_notification("NTLM Auth Error", err)
-            except ExchangeConnectionError as err:
-                self._last_error_detail = str(err)
-                _LOGGER.error("NTLM connection failed: %s", err)
-                errors["base"] = "cannot_connect"
-                self._send_debug_notification("NTLM Connection Error", err)
-            except Exception as err:
-                self._last_error_detail = str(err)
-                _LOGGER.exception("Unexpected error during NTLM validation: %s", err)
-                errors["base"] = "unknown"
-                self._send_debug_notification("NTLM Unexpected Error", err)
-            else:
+            auth_data = {
+                CONF_AUTH_TYPE: AUTH_TYPE_NTLM,
+                CONF_SERVER: user_input[CONF_SERVER],
+                CONF_EMAIL: user_input[CONF_EMAIL],
+                CONF_USERNAME: user_input.get(CONF_USERNAME, user_input[CONF_EMAIL]),
+                CONF_PASSWORD: user_input[CONF_PASSWORD],
+                CONF_DOMAIN: user_input.get(CONF_DOMAIN, ""),
+                CONF_ALLOW_INSECURE_SSL: user_input.get(
+                    CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
+                ),
+            }
+            errors = await self._async_validate_auth(auth_data)
+            if not errors:
                 await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
                 self._abort_if_unique_id_configured()
-
-                self._auth_data = {
-                    CONF_AUTH_TYPE: AUTH_TYPE_NTLM,
-                    CONF_SERVER: user_input[CONF_SERVER],
-                    CONF_EMAIL: user_input[CONF_EMAIL],
-                    CONF_USERNAME: user_input.get(
-                        CONF_USERNAME, user_input[CONF_EMAIL]
-                    ),
-                    CONF_PASSWORD: user_input[CONF_PASSWORD],
-                    CONF_DOMAIN: user_input.get(CONF_DOMAIN, ""),
-                    CONF_ALLOW_INSECURE_SSL: user_input.get(
-                        CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
-                    ),
-                }
+                self._auth_data = auth_data
                 return await self.async_step_options()
 
         return self.async_show_form(
@@ -179,43 +193,18 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            try:
-                client = create_client(
-                    auth_type=AUTH_TYPE_BASIC,
-                    server=user_input[CONF_SERVER],
-                    email=user_input[CONF_EMAIL],
-                    username=user_input.get(CONF_USERNAME, user_input[CONF_EMAIL]),
-                    password=user_input[CONF_PASSWORD],
-                )
-                await self.hass.async_add_executor_job(client.validate_connection)
-            except ExchangeAuthError as err:
-                self._last_error_detail = str(err)
-                _LOGGER.error("Basic auth failed: %s", err)
-                errors["base"] = "invalid_auth"
-                self._send_debug_notification("Basic Auth Error", err)
-            except ExchangeConnectionError as err:
-                self._last_error_detail = str(err)
-                _LOGGER.error("Basic connection failed: %s", err)
-                errors["base"] = "cannot_connect"
-                self._send_debug_notification("Basic Connection Error", err)
-            except Exception as err:
-                self._last_error_detail = str(err)
-                _LOGGER.exception("Unexpected error during Basic validation: %s", err)
-                errors["base"] = "unknown"
-                self._send_debug_notification("Basic Unexpected Error", err)
-            else:
+            auth_data = {
+                CONF_AUTH_TYPE: AUTH_TYPE_BASIC,
+                CONF_SERVER: user_input[CONF_SERVER],
+                CONF_EMAIL: user_input[CONF_EMAIL],
+                CONF_USERNAME: user_input.get(CONF_USERNAME, user_input[CONF_EMAIL]),
+                CONF_PASSWORD: user_input[CONF_PASSWORD],
+            }
+            errors = await self._async_validate_auth(auth_data)
+            if not errors:
                 await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
                 self._abort_if_unique_id_configured()
-
-                self._auth_data = {
-                    CONF_AUTH_TYPE: AUTH_TYPE_BASIC,
-                    CONF_SERVER: user_input[CONF_SERVER],
-                    CONF_EMAIL: user_input[CONF_EMAIL],
-                    CONF_USERNAME: user_input.get(
-                        CONF_USERNAME, user_input[CONF_EMAIL]
-                    ),
-                    CONF_PASSWORD: user_input[CONF_PASSWORD],
-                }
+                self._auth_data = auth_data
                 return await self.async_step_options()
 
         return self.async_show_form(
@@ -239,41 +228,18 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            try:
-                client = create_client(
-                    auth_type=AUTH_TYPE_OAUTH2,
-                    email=user_input[CONF_EMAIL],
-                    client_id=user_input[CONF_CLIENT_ID],
-                    client_secret=user_input[CONF_CLIENT_SECRET],
-                    tenant_id=user_input[CONF_TENANT_ID],
-                )
-                await self.hass.async_add_executor_job(client.validate_connection)
-            except ExchangeAuthError as err:
-                self._last_error_detail = str(err)
-                _LOGGER.error("OAuth2 auth failed: %s", err)
-                errors["base"] = "invalid_auth"
-                self._send_debug_notification("OAuth2 Auth Error", err)
-            except ExchangeConnectionError as err:
-                self._last_error_detail = str(err)
-                _LOGGER.error("OAuth2 connection failed: %s", err)
-                errors["base"] = "cannot_connect"
-                self._send_debug_notification("OAuth2 Connection Error", err)
-            except Exception as err:
-                self._last_error_detail = str(err)
-                _LOGGER.exception("Unexpected error during OAuth2 validation: %s", err)
-                errors["base"] = "unknown"
-                self._send_debug_notification("OAuth2 Unexpected Error", err)
-            else:
+            auth_data = {
+                CONF_AUTH_TYPE: AUTH_TYPE_OAUTH2,
+                CONF_EMAIL: user_input[CONF_EMAIL],
+                CONF_CLIENT_ID: user_input[CONF_CLIENT_ID],
+                CONF_CLIENT_SECRET: user_input[CONF_CLIENT_SECRET],
+                CONF_TENANT_ID: user_input[CONF_TENANT_ID],
+            }
+            errors = await self._async_validate_auth(auth_data)
+            if not errors:
                 await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
                 self._abort_if_unique_id_configured()
-
-                self._auth_data = {
-                    CONF_AUTH_TYPE: AUTH_TYPE_OAUTH2,
-                    CONF_EMAIL: user_input[CONF_EMAIL],
-                    CONF_CLIENT_ID: user_input[CONF_CLIENT_ID],
-                    CONF_CLIENT_SECRET: user_input[CONF_CLIENT_SECRET],
-                    CONF_TENANT_ID: user_input[CONF_TENANT_ID],
-                }
+                self._auth_data = auth_data
                 return await self.async_step_options()
 
         return self.async_show_form(
@@ -319,6 +285,83 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
                     ): bool,
                 }
             ),
+        )
+
+    async def async_step_reauth(
+        self, entry_data: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle re-authentication when the stored credentials stop working.
+
+        Triggered automatically by Home Assistant once the integration raises
+        ``ConfigEntryAuthFailed`` (e.g. the password has expired).
+        """
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for the new password / client secret and re-validate."""
+        entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        return await self._async_update_credentials(
+            entry=entry,
+            step_id="reauth_confirm",
+            reason="reauth_successful",
+            user_input=user_input,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Let the user proactively change the password before it expires."""
+        entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        return await self._async_update_credentials(
+            entry=entry,
+            step_id="reconfigure",
+            reason="reconfigure_successful",
+            user_input=user_input,
+        )
+
+    async def _async_update_credentials(
+        self,
+        *,
+        entry,
+        step_id: str,
+        reason: str,
+        user_input: dict[str, Any] | None,
+    ) -> ConfigFlowResult:
+        """Shared handler for the reauth/reconfigure credential update.
+
+        Only the secret field is editable: the password for NTLM/Basic, or the
+        client secret for OAuth2. All other connection details are preserved.
+        """
+        auth_type = entry.data[CONF_AUTH_TYPE]
+        cred_key = (
+            CONF_CLIENT_SECRET if auth_type == AUTH_TYPE_OAUTH2 else CONF_PASSWORD
+        )
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            new_data = {**entry.data, cred_key: user_input[cred_key]}
+            errors = await self._async_validate_auth(new_data)
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data=new_data,
+                    reason=reason,
+                )
+
+        return self.async_show_form(
+            step_id=step_id,
+            data_schema=vol.Schema({vol.Required(cred_key): str}),
+            errors=errors,
+            description_placeholders={
+                "email": entry.data[CONF_EMAIL],
+                "error_detail": self._last_error_detail,
+            },
         )
 
     @staticmethod

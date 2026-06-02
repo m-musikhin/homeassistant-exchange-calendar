@@ -65,6 +65,22 @@
           "update_interval": "Friss\u00edt\u00e9si id\u0151k\u00f6z (perc)",
           "read_only": "Csak olvashat\u00f3 m\u00f3d (l\u00e9trehoz\u00e1s/m\u00f3dos\u00edt\u00e1s/t\u00f6rl\u00e9s tilt\u00e1sa)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Exchange \u00fajrahiteles\u00edt\u00e9s",
+        "description": "A(z) {email} fi\u00f3k hiteles\u00edt\u0151 adatai m\u00e1r nem \u00e9rv\u00e9nyesek (lehet, hogy lej\u00e1rt a jelsz\u00f3). Add meg az \u00faj adatokat az \u00fajracsatlakoz\u00e1shoz.",
+        "data": {
+          "password": "\u00daj jelsz\u00f3",
+          "client_secret": "\u00daj titkos kulcs (Client Secret)"
+        }
+      },
+      "reconfigure": {
+        "title": "Exchange hiteles\u00edt\u0151 adatok m\u00f3dos\u00edt\u00e1sa",
+        "description": "Friss\u00edtsd a(z) {email} fi\u00f3k t\u00e1rolt hiteles\u00edt\u0151 adatait az integr\u00e1ci\u00f3 elt\u00e1vol\u00edt\u00e1sa n\u00e9lk\u00fcl.",
+        "data": {
+          "password": "\u00daj jelsz\u00f3",
+          "client_secret": "\u00daj titkos kulcs (Client Secret)"
+        }
       }
     },
     "error": {
@@ -73,7 +89,9 @@
       "unknown": "V\u00e1ratlan hiba: {error_detail}"
     },
     "abort": {
-      "already_configured": "Ez az Exchange fi\u00f3k m\u00e1r konfigur\u00e1lva van."
+      "already_configured": "Ez az Exchange fi\u00f3k m\u00e1r konfigur\u00e1lva van.",
+      "reauth_successful": "Az \u00fajrahiteles\u00edt\u00e9s sikeres volt.",
+      "reconfigure_successful": "A hiteles\u00edt\u0151 adatok sikeresen friss\u00fcltek."
     }
   },
   "options": {

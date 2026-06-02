@@ -7,6 +7,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -71,7 +72,9 @@ class ExchangeCalendarCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 self.client.get_events, days, max_events
             )
         except ExchangeAuthError as err:
-            raise UpdateFailed(
+            # Trigger the reauth flow so the user can update the (likely expired)
+            # password without removing and re-adding the integration.
+            raise ConfigEntryAuthFailed(
                 f"Exchange authentication error: {err}"
             ) from err
         except ExchangeConnectionError as err:

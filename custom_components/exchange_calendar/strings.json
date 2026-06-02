@@ -65,6 +65,22 @@
           "update_interval": "Update interval (minutes)",
           "read_only": "Read-only mode (disable create/update/delete)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Exchange",
+        "description": "The credentials for {email} are no longer valid (the password may have expired). Enter the new credentials to reconnect.",
+        "data": {
+          "password": "New password",
+          "client_secret": "New client secret"
+        }
+      },
+      "reconfigure": {
+        "title": "Change Exchange credentials",
+        "description": "Update the stored credentials for {email} without removing the integration.",
+        "data": {
+          "password": "New password",
+          "client_secret": "New client secret"
+        }
       }
     },
     "error": {
@@ -73,7 +89,9 @@
       "unknown": "Unexpected error: {error_detail}"
     },
     "abort": {
-      "already_configured": "This Exchange account is already configured."
+      "already_configured": "This Exchange account is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "The credentials were updated successfully."
     }
   },
   "options": {
