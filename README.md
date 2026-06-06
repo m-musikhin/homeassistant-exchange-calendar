@@ -201,9 +201,9 @@ After initial setup, you can modify these options via **Settings** > **Devices &
 - [x] Voice assistant (Assist pipeline) support
 - [x] **Microsoft Graph API migration for Office 365** — Office 365 now uses Graph API instead of EWS. On-premise (NTLM/Basic) continues to use EWS. See [#3](https://github.com/bohemtucsok/homeassistant-exchange-calendar/issues/3).
 - [x] Past events browsing — Calendar view now supports browsing past events
+- [x] **Multiple calendar support per account** — Expose your additional mailbox calendars as separate entities. Pick them under the integration's **Configure** (Options) menu; each selected calendar becomes its own `calendar.*` entity.
 - [ ] Exchange Tasks as Home Assistant to-do list entities
 - [ ] Shared / room calendar support
-- [ ] Multiple calendar support per account
 - [ ] Personal Microsoft account support
 
 ## Supporters

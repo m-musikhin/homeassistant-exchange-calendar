@@ -189,10 +189,50 @@ class GraphCalendarClient:
         _LOGGER.info("[Graph] Validation OK for %s", self._email)
         return True
 
+    # ── Calendar discovery ───────────────────────────────────────────
+
+    def _cal_prefix(self, calendar_id: str | None) -> str:
+        """Return the Graph path prefix for a calendar (None -> default)."""
+        if calendar_id:
+            return f"/users/{self._email}/calendars/{calendar_id}"
+        return f"/users/{self._email}"
+
+    def list_calendars(self) -> list[dict[str, Any]]:
+        """Return the mailbox's own calendars via GET /users/{email}/calendars."""
+        self._ensure_token()
+        params = {"$select": "id,name,isDefaultCalendar,canEdit"}
+        result: list[dict[str, Any]] = []
+        path = f"/users/{self._email}/calendars"
+
+        while path:
+            resp = self._graph_request("GET", path, params=params)
+            data = resp.json()
+            for item in data.get("value", []):
+                result.append(
+                    {
+                        "id": item.get("id"),
+                        "name": item.get("name") or "(Unnamed)",
+                        "is_default": bool(item.get("isDefaultCalendar", False)),
+                        "can_edit": bool(item.get("canEdit", True)),
+                    }
+                )
+            next_link = data.get("@odata.nextLink")
+            if next_link:
+                path = next_link.replace(GRAPH_BASE_URL, "")
+                params = None
+            else:
+                break
+
+        _LOGGER.debug("[Graph] Discovered %d calendar(s)", len(result))
+        return result
+
     # ── Read events ──────────────────────────────────────────────────
 
     def get_events(
-        self, days_to_fetch: int = 30, max_events: int = 50
+        self,
+        days_to_fetch: int = 30,
+        max_events: int = 50,
+        calendar_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch calendar events using calendarView (expands recurrences)."""
         self._ensure_token()
@@ -208,7 +248,7 @@ class GraphCalendarClient:
         }
 
         events: list[dict[str, Any]] = []
-        path = f"/users/{self._email}/calendarView"
+        path = f"{self._cal_prefix(calendar_id)}/calendarView"
 
         try:
             while path and len(events) < max_events:
@@ -243,7 +283,11 @@ class GraphCalendarClient:
         return events[:max_events]
 
     def get_events_range(
-        self, start_dt: datetime, end_dt: datetime, max_events: int = 200
+        self,
+        start_dt: datetime,
+        end_dt: datetime,
+        max_events: int = 200,
+        calendar_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch calendar events for an arbitrary date range.
 
@@ -265,7 +309,7 @@ class GraphCalendarClient:
         }
 
         events: list[dict[str, Any]] = []
-        path = f"/users/{self._email}/calendarView"
+        path = f"{self._cal_prefix(calendar_id)}/calendarView"
 
         try:
             while path and len(events) < max_events:
@@ -303,13 +347,14 @@ class GraphCalendarClient:
         end: datetime,
         description: str | None = None,
         location: str | None = None,
+        calendar_id: str | None = None,
     ) -> str:
         """Create a new calendar event. Returns the event ID."""
         body = self._build_event_body(summary, start, end, description, location)
 
         resp = self._graph_request(
             "POST",
-            f"/users/{self._email}/events",
+            f"{self._cal_prefix(calendar_id)}/events",
             json_body=body,
         )
         event_id = resp.json()["id"]
@@ -326,8 +371,13 @@ class GraphCalendarClient:
         end: datetime | None = None,
         description: str | None = None,
         location: str | None = None,
+        calendar_id: str | None = None,
     ) -> None:
-        """Update an existing calendar event by ID."""
+        """Update an existing calendar event by ID.
+
+        ``calendar_id`` is accepted for interface parity with the EWS backend;
+        Graph addresses events by their mailbox-unique id, so it is not needed.
+        """
         body: dict[str, Any] = {}
         if summary is not None:
             body["subject"] = summary
@@ -357,8 +407,11 @@ class GraphCalendarClient:
 
     # ── Delete event ─────────────────────────────────────────────────
 
-    def delete_event(self, uid: str) -> None:
-        """Delete a calendar event by ID."""
+    def delete_event(self, uid: str, calendar_id: str | None = None) -> None:
+        """Delete a calendar event by ID.
+
+        ``calendar_id`` is accepted for interface parity with the EWS backend.
+        """
         self._graph_request(
             "DELETE",
             f"/users/{self._email}/events/{uid}",

@@ -99,10 +99,14 @@
       "init": {
         "title": "Exchange Calendar Options",
         "data": {
+          "calendars": "Calendars to show",
           "days_to_fetch": "Days to fetch ahead",
           "max_events": "Maximum number of events",
           "update_interval": "Update interval (minutes)",
           "read_only": "Read-only mode (disable create/update/delete)"
+        },
+        "data_description": {
+          "calendars": "Select which of your calendars are exposed as entities. Each selected calendar becomes its own calendar entity."
         }
       }
     }

@@ -8,6 +8,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+import homeassistant.helpers.config_validation as cv
 
 from .const import (
     DOMAIN,
@@ -25,6 +26,7 @@ from .const import (
     CONF_MAX_EVENTS,
     CONF_UPDATE_INTERVAL,
     CONF_READ_ONLY,
+    CONF_CALENDARS,
     AUTH_TYPE_BASIC,
     AUTH_TYPE_NTLM,
     AUTH_TYPE_OAUTH2,
@@ -33,6 +35,7 @@ from .const import (
     DEFAULT_ALLOW_INSECURE_SSL,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_READ_ONLY,
+    DEFAULT_CALENDAR_KEY,
 )
 from homeassistant.components import persistent_notification
 
@@ -374,6 +377,43 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
 class ExchangeCalendarOptionsFlow(OptionsFlow):
     """Handle options flow for Exchange Calendar."""
 
+    async def _async_discover_calendars(self) -> dict[str, str]:
+        """Return {calendar_key: label} for the multi-select, or {} on failure.
+
+        The mailbox's default calendar is represented by DEFAULT_CALENDAR_KEY so
+        that its entity keeps the original unique_id.
+        """
+        data = self.config_entry.data
+        try:
+            client = create_client(
+                auth_type=data[CONF_AUTH_TYPE],
+                email=data[CONF_EMAIL],
+                server=data.get(CONF_SERVER),
+                username=data.get(CONF_USERNAME),
+                password=data.get(CONF_PASSWORD),
+                domain=data.get(CONF_DOMAIN, ""),
+                client_id=data.get(CONF_CLIENT_ID),
+                client_secret=data.get(CONF_CLIENT_SECRET),
+                tenant_id=data.get(CONF_TENANT_ID),
+                allow_insecure_ssl=data.get(
+                    CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
+                ),
+            )
+            calendars = await self.hass.async_add_executor_job(
+                client.list_calendars
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Could not list calendars for options: %s", err)
+            return {}
+
+        choices: dict[str, str] = {}
+        for cal in calendars:
+            if cal.get("is_default"):
+                choices[DEFAULT_CALENDAR_KEY] = f"{cal['name']} (default)"
+            else:
+                choices[cal["id"]] = cal["name"]
+        return choices
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -381,34 +421,53 @@ class ExchangeCalendarOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        calendar_choices = await self._async_discover_calendars()
+
+        current_calendars = self.config_entry.options.get(
+            CONF_CALENDARS
+        ) or [DEFAULT_CALENDAR_KEY]
+        # Drop any stored keys that no longer exist server-side.
+        if calendar_choices:
+            current_calendars = [
+                k for k in current_calendars if k in calendar_choices
+            ] or [DEFAULT_CALENDAR_KEY]
+
+        schema: dict[Any, Any] = {}
+        if calendar_choices:
+            schema[
+                vol.Optional(CONF_CALENDARS, default=current_calendars)
+            ] = cv.multi_select(calendar_choices)
+
+        schema.update(
+            {
+                vol.Optional(
+                    CONF_DAYS_TO_FETCH,
+                    default=self.config_entry.options.get(
+                        CONF_DAYS_TO_FETCH, DEFAULT_DAYS_TO_FETCH
+                    ),
+                ): vol.All(int, vol.Range(min=30, max=90)),
+                vol.Optional(
+                    CONF_MAX_EVENTS,
+                    default=self.config_entry.options.get(
+                        CONF_MAX_EVENTS, DEFAULT_MAX_EVENTS
+                    ),
+                ): vol.All(int, vol.Range(min=1, max=500)),
+                vol.Optional(
+                    CONF_UPDATE_INTERVAL,
+                    default=self.config_entry.options.get(
+                        CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+                    ),
+                ): vol.All(int, vol.Range(min=1, max=60)),
+                vol.Optional(
+                    CONF_READ_ONLY,
+                    default=self.config_entry.options.get(
+                        CONF_READ_ONLY, DEFAULT_READ_ONLY
+                    ),
+                ): bool,
+            }
+        )
+
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_DAYS_TO_FETCH,
-                        default=self.config_entry.options.get(
-                            CONF_DAYS_TO_FETCH, DEFAULT_DAYS_TO_FETCH
-                        ),
-                    ): vol.All(int, vol.Range(min=30, max=90)),
-                    vol.Optional(
-                        CONF_MAX_EVENTS,
-                        default=self.config_entry.options.get(
-                            CONF_MAX_EVENTS, DEFAULT_MAX_EVENTS
-                        ),
-                    ): vol.All(int, vol.Range(min=1, max=500)),
-                    vol.Optional(
-                        CONF_UPDATE_INTERVAL,
-                        default=self.config_entry.options.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-                        ),
-                    ): vol.All(int, vol.Range(min=1, max=60)),
-                    vol.Optional(
-                        CONF_READ_ONLY,
-                        default=self.config_entry.options.get(
-                            CONF_READ_ONLY, DEFAULT_READ_ONLY
-                        ),
-                    ): bool,
-                }
-            ),
+            data_schema=vol.Schema(schema),
         )

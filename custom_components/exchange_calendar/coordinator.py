@@ -18,20 +18,25 @@ from .const import (
     CONF_DAYS_TO_FETCH,
     CONF_MAX_EVENTS,
     CONF_UPDATE_INTERVAL,
+    CONF_CALENDARS,
     DEFAULT_DAYS_TO_FETCH,
     DEFAULT_MAX_EVENTS,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_CALENDAR_KEY,
 )
 from .exchange_client import ExchangeClient, ExchangeConnectionError, ExchangeAuthError
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class ExchangeCalendarCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
+class ExchangeCalendarCoordinator(
+    DataUpdateCoordinator[dict[str, list[dict[str, Any]]]]
+):
     """Coordinator for periodic Exchange calendar event fetching.
 
-    Equivalent to MMM-Exchange scheduleNextFetch(), using HA's
-    DataUpdateCoordinator infrastructure.
+    Fetches one or more calendars per refresh. ``data`` is keyed by calendar
+    key (``DEFAULT_CALENDAR_KEY`` for the primary calendar, otherwise the
+    backend calendar id), each holding that calendar's list of event dicts.
     """
 
     config_entry: ConfigEntry
@@ -44,6 +49,11 @@ class ExchangeCalendarCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
     ) -> None:
         """Initialize the coordinator."""
         self.client = client
+        # Discovered calendars (populated lazily on first refresh).
+        self.available_calendars: list[dict[str, Any]] = []
+        # Calendar key -> display name, for entity naming.
+        self.calendar_names: dict[str, str] = {}
+        self._discovered = False
         interval = config_entry.options.get(
             CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
         )
@@ -55,11 +65,41 @@ class ExchangeCalendarCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             config_entry=config_entry,
         )
 
-    async def _async_update_data(self) -> list[dict[str, Any]]:
-        """Fetch events from Exchange server.
+    def _selected_calendar_keys(self) -> list[str]:
+        """Return the calendar keys selected in options (default: primary)."""
+        selected = self.config_entry.options.get(CONF_CALENDARS)
+        if not selected:
+            return [DEFAULT_CALENDAR_KEY]
+        return list(selected)
+
+    async def _async_discover_calendars(self) -> None:
+        """Discover the mailbox's calendars once and cache id->name mapping."""
+        if self._discovered:
+            return
+        try:
+            calendars = await self.hass.async_add_executor_job(
+                self.client.list_calendars
+            )
+        except (ExchangeAuthError, ExchangeConnectionError) as err:
+            # Non-fatal: fall back to just the default calendar.
+            _LOGGER.debug("Calendar discovery failed: %s", err)
+            return
+
+        self.available_calendars = calendars
+        names: dict[str, str] = {}
+        for cal in calendars:
+            key = DEFAULT_CALENDAR_KEY if cal.get("is_default") else cal["id"]
+            names[key] = cal.get("name") or "Calendar"
+        self.calendar_names = names
+        self._discovered = True
+
+    async def _async_update_data(self) -> dict[str, list[dict[str, Any]]]:
+        """Fetch events for each selected calendar.
 
         exchangelib is synchronous, so we run it via async_add_executor_job.
         """
+        await self._async_discover_calendars()
+
         days = self.config_entry.options.get(
             CONF_DAYS_TO_FETCH, DEFAULT_DAYS_TO_FETCH
         )
@@ -67,20 +107,38 @@ class ExchangeCalendarCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             CONF_MAX_EVENTS, DEFAULT_MAX_EVENTS
         )
 
-        try:
-            return await self.hass.async_add_executor_job(
-                self.client.get_events, days, max_events
-            )
-        except ExchangeAuthError as err:
-            # Trigger the reauth flow so the user can update the (likely expired)
-            # password without removing and re-adding the integration.
-            raise ConfigEntryAuthFailed(
-                f"Exchange authentication error: {err}"
-            ) from err
-        except ExchangeConnectionError as err:
+        keys = self._selected_calendar_keys()
+        result: dict[str, list[dict[str, Any]]] = {}
+        connection_errors = 0
+        last_conn_err: Exception | None = None
+
+        for key in keys:
+            calendar_id = None if key == DEFAULT_CALENDAR_KEY else key
+            try:
+                result[key] = await self.hass.async_add_executor_job(
+                    self.client.get_events, days, max_events, calendar_id
+                )
+            except ExchangeAuthError as err:
+                # Trigger the reauth flow so the user can update the (likely
+                # expired) password without removing the integration.
+                raise ConfigEntryAuthFailed(
+                    f"Exchange authentication error: {err}"
+                ) from err
+            except ExchangeConnectionError as err:
+                # One unreachable calendar should not fail the whole refresh.
+                _LOGGER.warning("Failed to fetch calendar '%s': %s", key, err)
+                result[key] = []
+                connection_errors += 1
+                last_conn_err = err
+            except Exception as err:
+                _LOGGER.exception("Unexpected error fetching Exchange events")
+                raise UpdateFailed(f"Unexpected error: {err}") from err
+
+        # If every selected calendar was unreachable, treat it as a refresh
+        # failure so the entities become unavailable instead of showing empty.
+        if keys and connection_errors == len(keys):
             raise UpdateFailed(
-                f"Exchange server unreachable: {err}"
-            ) from err
-        except Exception as err:
-            _LOGGER.exception("Unexpected error fetching Exchange events")
-            raise UpdateFailed(f"Unexpected error: {err}") from err
+                f"Exchange server unreachable: {last_conn_err}"
+            )
+
+        return result

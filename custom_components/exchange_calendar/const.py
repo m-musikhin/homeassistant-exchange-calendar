@@ -25,6 +25,12 @@ CONF_DAYS_TO_FETCH = "days_to_fetch"
 CONF_MAX_EVENTS = "max_events"
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_READ_ONLY = "read_only"
+CONF_CALENDARS = "calendars"
+
+# Sentinel key for the mailbox's default (primary) calendar. Used both as the
+# coordinator data key and as the stored selection value so that the default
+# calendar entity can keep its original unique_id for backward compatibility.
+DEFAULT_CALENDAR_KEY = "__default__"
 
 # Defaults (aligned with MMM-Exchange where applicable)
 DEFAULT_DAYS_TO_FETCH = 30

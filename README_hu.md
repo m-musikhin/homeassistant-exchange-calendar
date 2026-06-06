@@ -184,9 +184,9 @@ A kezdeti beállítás után módosíthatod az opciókat: **Beállítások** > *
 - [x] Hangasszisztens (Assist pipeline) támogatás
 - [x] **Microsoft Graph API migráció Office 365-höz** — Az Office 365 mostantól Graph API-t használ EWS helyett. Az on-premise (NTLM/Basic) továbbra is EWS-t használ. Lásd [#3](https://github.com/bohemtucsok/homeassistant-exchange-calendar/issues/3).
 - [x] Múltbeli események böngészése — A naptár nézet mostantól támogatja a múltbeli események megtekintését
+- [x] **Több naptár támogatás fiókonként** — A postafiók további naptárai külön entitásként jeleníthetők meg. Az integráció **Beállítások** (Options) menüjében pipálhatók ki; minden kiválasztott naptár külön `calendar.*` entitás lesz.
 - [ ] Exchange feladatok megjelenítése Home Assistant feladatlista entitásként
 - [ ] Megosztott / szoba naptár támogatás
-- [ ] Több naptár támogatás fiókonként
 - [ ] Személyes Microsoft fiók támogatás
 
 ## Támogatók
