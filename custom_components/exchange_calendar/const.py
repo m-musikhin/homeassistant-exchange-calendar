@@ -21,6 +21,7 @@ CONF_CLIENT_SECRET = "client_secret"
 CONF_TENANT_ID = "tenant_id"
 CONF_CERT_PATH = "cert_path"
 CONF_KEY_PATH = "key_path"
+CONF_USERAGENT = "useragent"
 CONF_ALLOW_INSECURE_SSL = "allow_insecure_ssl"
 
 # Options keys (stored in config_entry.options)

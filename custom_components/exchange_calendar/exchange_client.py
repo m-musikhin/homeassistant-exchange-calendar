@@ -90,6 +90,7 @@ class ExchangeClient:
         tenant_id: str | None = None,
         cert_path: str | None = None,
         key_path: str | None = None,
+        useragent: str | None = None,
         allow_insecure_ssl: bool = False,
     ) -> None:
         self._auth_type = auth_type
@@ -105,6 +106,7 @@ class ExchangeClient:
         self._tenant_id = tenant_id
         self._cert_path = cert_path
         self._key_path = key_path
+        self._useragent = useragent
         self._allow_insecure_ssl = allow_insecure_ssl
         self._account: Account | None = None
         self._original_adapter_cls = None
@@ -198,6 +200,45 @@ class ExchangeClient:
             auth_type=OAUTH2,
         )
 
+    def _create_ews_account(self, config, access_type) -> Account:
+        """Create an EWS Account, optionally with a per-entry User-Agent.
+
+        If ``self._useragent`` is set, a scoped ``Protocol`` subclass is used
+        so the custom User-Agent does not leak to other EWS connections in the
+        HA process.
+        """
+        import exchangelib.account
+
+        if not self._useragent:
+            return Account(
+                primary_smtp_address=self._email,
+                config=config,
+                autodiscover=False,
+                access_type=access_type,
+            )
+
+        class _UAProtocol(Protocol):
+            USERAGENT = self._useragent
+
+        original = exchangelib.account.Protocol
+        with _CBA_GLOBAL_LOCK:
+            try:
+                exchangelib.account.Protocol = _UAProtocol
+                # Ensure a fresh Protocol instance is created with our USERAGENT
+                endpoint = config.service_endpoint or f"https://{self._server}/EWS/Exchange.asmx"
+                cache_key = (endpoint, config.credentials)
+                with Protocol._protocol_cache_lock:
+                    if cache_key in Protocol._protocol_cache:
+                        del Protocol._protocol_cache[cache_key]
+                return Account(
+                    primary_smtp_address=self._email,
+                    config=config,
+                    autodiscover=False,
+                    access_type=access_type,
+                )
+            finally:
+                exchangelib.account.Protocol = original
+
     def _connect_cba(self) -> Account:
         """Connect using Certificate-Based Authentication (CBA).
 
@@ -240,8 +281,9 @@ class ExchangeClient:
             cert_file = _cba_cert_file
 
         class _CBAProtocol(Protocol):
-            """Protocol that uses the entry-scoped TLS adapter."""
+            """Protocol that uses the entry-scoped TLS adapter and User-Agent."""
             HTTP_ADAPTER_CLS = _CBATLSAdapter
+            USERAGENT = self._useragent or Protocol.USERAGENT
 
         original_account_protocol_cls = exchangelib.account.Protocol
 
@@ -317,12 +359,7 @@ class ExchangeClient:
 
             _LOGGER.debug("[Exchange] Creating Account object for %s...", self._email)
             access_type = IMPERSONATION if self._auth_type == AUTH_TYPE_OAUTH2 else DELEGATE
-            self._account = Account(
-                primary_smtp_address=self._email,
-                config=config,
-                autodiscover=False,
-                access_type=access_type,
-            )
+            self._account = self._create_ews_account(config, access_type)
             _LOGGER.info("[Exchange] Connected successfully to %s as %s", self._server, self._email)
             return self._account
         except (UnauthorizedError, ErrorAccessDenied) as err:
@@ -708,6 +745,7 @@ def create_client(
     tenant_id: str | None = None,
     cert_path: str | None = None,
     key_path: str | None = None,
+    useragent: str | None = None,
     allow_insecure_ssl: bool = False,
 ):
     """Factory: return EWS client for NTLM/Basic/CBA, Graph client for OAuth2."""
@@ -732,5 +770,6 @@ def create_client(
         tenant_id=tenant_id,
         cert_path=cert_path,
         key_path=key_path,
+        useragent=useragent,
         allow_insecure_ssl=allow_insecure_ssl,
     )

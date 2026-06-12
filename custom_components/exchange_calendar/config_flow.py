@@ -23,6 +23,7 @@ from .const import (
     CONF_TENANT_ID,
     CONF_CERT_PATH,
     CONF_KEY_PATH,
+    CONF_USERAGENT,
     CONF_ALLOW_INSECURE_SSL,
     CONF_DAYS_TO_FETCH,
     CONF_MAX_EVENTS,
@@ -80,6 +81,7 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
                 tenant_id=auth_data.get(CONF_TENANT_ID),
                 cert_path=auth_data.get(CONF_CERT_PATH),
                 key_path=auth_data.get(CONF_KEY_PATH),
+                useragent=auth_data.get(CONF_USERAGENT),
                 allow_insecure_ssl=auth_data.get(
                     CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
                 ),
@@ -168,6 +170,7 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_USERNAME: user_input.get(CONF_USERNAME, user_input[CONF_EMAIL]),
                 CONF_PASSWORD: user_input[CONF_PASSWORD],
                 CONF_DOMAIN: user_input.get(CONF_DOMAIN, ""),
+                CONF_USERAGENT: user_input.get(CONF_USERAGENT),
                 CONF_ALLOW_INSECURE_SSL: user_input.get(
                     CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
                 ),
@@ -188,6 +191,7 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Optional(CONF_USERNAME): str,
                     vol.Required(CONF_PASSWORD): str,
                     vol.Optional(CONF_DOMAIN, default=""): str,
+                    vol.Optional(CONF_USERAGENT): str,
                     vol.Optional(
                         CONF_ALLOW_INSECURE_SSL, default=DEFAULT_ALLOW_INSECURE_SSL
                     ): bool,
@@ -210,6 +214,7 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_EMAIL: user_input[CONF_EMAIL],
                 CONF_USERNAME: user_input.get(CONF_USERNAME, user_input[CONF_EMAIL]),
                 CONF_PASSWORD: user_input[CONF_PASSWORD],
+                CONF_USERAGENT: user_input.get(CONF_USERAGENT),
             }
             errors = await self._async_validate_auth(auth_data)
             if not errors:
@@ -226,6 +231,7 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_EMAIL): str,
                     vol.Optional(CONF_USERNAME): str,
                     vol.Required(CONF_PASSWORD): str,
+                    vol.Optional(CONF_USERAGENT): str,
                 }
             ),
             errors=errors,
@@ -245,6 +251,7 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_EMAIL: user_input[CONF_EMAIL],
                 CONF_CERT_PATH: user_input[CONF_CERT_PATH],
                 CONF_KEY_PATH: user_input.get(CONF_KEY_PATH),
+                CONF_USERAGENT: user_input.get(CONF_USERAGENT),
                 CONF_ALLOW_INSECURE_SSL: user_input.get(
                     CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
                 ),
@@ -264,6 +271,7 @@ class ExchangeCalendarConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_EMAIL): str,
                     vol.Required(CONF_CERT_PATH): str,
                     vol.Optional(CONF_KEY_PATH): str,
+                    vol.Optional(CONF_USERAGENT): str,
                     vol.Optional(
                         CONF_ALLOW_INSECURE_SSL, default=DEFAULT_ALLOW_INSECURE_SSL
                     ): bool,
@@ -457,6 +465,7 @@ class ExchangeCalendarOptionsFlow(OptionsFlow):
                 tenant_id=data.get(CONF_TENANT_ID),
                 cert_path=data.get(CONF_CERT_PATH),
                 key_path=data.get(CONF_KEY_PATH),
+                useragent=data.get(CONF_USERAGENT),
                 allow_insecure_ssl=data.get(
                     CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
                 ),

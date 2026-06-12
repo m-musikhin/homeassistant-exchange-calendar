@@ -21,6 +21,7 @@ from .const import (
     CONF_TENANT_ID,
     CONF_CERT_PATH,
     CONF_KEY_PATH,
+    CONF_USERAGENT,
     CONF_ALLOW_INSECURE_SSL,
     DEFAULT_ALLOW_INSECURE_SSL,
 )
@@ -52,6 +53,7 @@ async def async_setup_entry(
         tenant_id=entry.data.get(CONF_TENANT_ID),
         cert_path=entry.data.get(CONF_CERT_PATH),
         key_path=entry.data.get(CONF_KEY_PATH),
+        useragent=entry.data.get(CONF_USERAGENT),
         allow_insecure_ssl=entry.data.get(
             CONF_ALLOW_INSECURE_SSL, DEFAULT_ALLOW_INSECURE_SSL
         ),

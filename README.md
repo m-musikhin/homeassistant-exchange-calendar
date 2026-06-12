@@ -91,6 +91,16 @@ For Exchange servers that require client certificate authentication instead of p
 
 > **Re-authentication**: When your certificate expires, use the integration's **Reconfigure** or **Re-authenticate** menu to update the certificate path without removing the integration.
 
+### Custom User-Agent
+
+Some on-premise Exchange servers block or throttle the default `exchangelib` User-Agent. You can optionally set a custom **User-Agent** string in the config flow for **NTLM**, **Basic**, and **Certificate** authentication types.
+
+Common examples:
+- `Microsoft Outlook/16.0 (Android; en-US)`
+- `Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0.12345; Pro)`
+
+Leave the field empty to use the default exchangelib User-Agent.
+
 ### Office 365 (Graph API)
 
 Uses the Microsoft Graph API for Office 365 / Microsoft 365 mailboxes.
