@@ -74,7 +74,12 @@ For Exchange servers that require client certificate authentication instead of p
      ```bash
      openssl pkcs12 -in certificate.pfx -out client.pem -nodes
      ```
-2. Place the PEM file somewhere accessible by your Home Assistant instance (e.g. `/config/ssl/exchange.pem`).
+2. Make sure the PEM file **does not have a password** on the private key. If it does, remove it:
+   ```bash
+   openssl rsa -in client.pem -out client_unencrypted.pem
+   ```
+   Then use `client_unencrypted.pem` as the certificate file.
+3. Place the PEM file somewhere accessible by your Home Assistant instance (e.g. `/config/ssl/exchange.pem`).
 
 #### Home Assistant Setup
 
@@ -85,7 +90,7 @@ For Exchange servers that require client certificate authentication instead of p
    - **Exchange server hostname**: e.g., `mail.example.com`
    - **Email address**: Your email (e.g., `user@example.com`)
    - **Path to client certificate**: Absolute path to the PEM file (e.g., `/config/ssl/exchange.pem`)
-   - **Path to private key** (Optional): Only if the private key is stored in a separate file
+   - **Path to private key** (Optional): **Leave empty** in most cases. Only fill this if your private key is stored in a separate file from the certificate.
    - **Allow insecure SSL**: Enable for self-signed certificates
 5. Configure calendar options
 
