@@ -524,8 +524,7 @@ class ExchangeClient:
             return date(ews_dt.year, ews_dt.month, ews_dt.day)
         return ews_dt
 
-    @staticmethod
-    def _convert_calendar_item(item: CalendarItem) -> dict[str, Any]:
+    def _convert_calendar_item(self, item: CalendarItem) -> dict[str, Any]:
         """Convert exchangelib CalendarItem to dict.
 
         Field mapping from MMM-Exchange parseXmlResponse():
@@ -534,7 +533,14 @@ class ExchangeClient:
           end -> end
           location -> location
           organizer -> organizer (stored separately)
+
+        If the server does not provide a timezone for a field, it is
+        interpreted in the mailbox's default timezone so that conversion
+        to Home Assistant local time works correctly.
         """
+        account = self._ensure_connected()
+        default_tz = account.default_timezone
+
         if item.is_all_day:
             start = item.start
             end = item.end
@@ -554,6 +560,12 @@ class ExchangeClient:
         else:
             start = ExchangeClient._to_python_dt(item.start)
             end = ExchangeClient._to_python_dt(item.end)
+            # Fallback: if the server omitted timezone info, use the
+            # mailbox's default timezone instead of assuming HA local time.
+            if isinstance(start, datetime) and start.tzinfo is None:
+                start = start.replace(tzinfo=default_tz)
+            if isinstance(end, datetime) and end.tzinfo is None:
+                end = end.replace(tzinfo=default_tz)
 
         organizer_name = ""
         if item.organizer:
